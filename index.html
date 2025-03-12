@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Tank Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #gameContainer {
+            position: relative;
+            width: 1200px;
+            height: 900px;
+            background-color: #4a4;
+            border: 3px solid #000;
+            overflow: hidden;
+        }
+        #tank {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-color: #00f;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        #tankBarrel {
+            position: absolute;
+            width: 20px;
+            height: 8px;
+            background-color: #555;
+            transform-origin: 0 50%;
+            left: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .obstacle {
+            position: absolute;
+            background-color: #964B00;
+            border: 2px solid #000;
+        }
+        .enemy {
+            position: absolute;
+            width: 35px;
+            height: 35px;
+            background-color: #f00;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .enemyBarrel {
+            position: absolute;
+            width: 18px;
+            height: 6px;
+            background-color: #555;
+            transform-origin: 0 50%;
+            left: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .bullet {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background-color: #ff0;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .enemyBullet {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background-color: #f80;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .bulletTrail {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background-color: rgba(255, 255, 0, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.5s ease-out;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            z-index: 10;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">Score: 0</div>
+        <div id="tank">
+            <div id="tankBarrel"></div>
+        </div>
+        <div id="instructions">
+            Use WASD or arrow keys to move<br>
+            Mouse to aim<br>
+            Left click to shoot
+        </div>
+    </div>
+
+    <script>
+        // Game elements
+        const gameContainer = document.getElementById('gameContainer');
+        const tank = document.getElementById('tank');
+        const tankBarrel = document.getElementById('tankBarrel');
+        const scoreDisplay = document.getElementById('score');
+        
+        // Game state
+        let score = 0;
+        let tankX = 400;
+        let tankY = 300;
+        let tankSpeed = 3;
+        let tankAngle = 0;
+        let keys = {};
+        let obstacles = [];
+        let enemies = [];
+        let bullets = [];
+        let enemyBullets = [];
+        let gameActive = true;
+        let lastShotTime = 0;
+        const shootCooldown = 300; // milliseconds between shots
+        const maxBullets = 10; // Maximum number of active bullets
+        
+        // Initialize tank position
+        updateTankPosition();
+        
+        // Create initial obstacles
+        createObstacles(8);
+        
+        // Create initial enemies
+        createEnemies(5);
+        
+        // Event listeners for keyboard controls
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        // Event listener for mouse movement (aiming)
+        gameContainer.addEventListener('mousemove', (e) => {
+            const rect = gameContainer.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Calculate angle between tank and mouse
+            tankAngle = Math.atan2(mouseY - tankY, mouseX - tankX);
+            
+            // Rotate tank barrel
+            tankBarrel.style.transform = `translateY(-50%) rotate(${tankAngle}rad)`;
+        });
+        
+        // Add a keydown event listener for the space bar
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                shoot();
+            }
+        });
+        
+        // Game loop
+        function gameLoop() {
+            if (!gameActive) return;
+            
+            // Store previous position for collision handling
+            const prevTankX = tankX;
+            const prevTankY = tankY;
+            
+            // Handle movement
+            if (keys['ArrowUp'] || keys['w'] || keys['W']) {
+                tankY -= tankSpeed;
+            }
+            if (keys['ArrowDown'] || keys['s'] || keys['S']) {
+                tankY += tankSpeed;
+            }
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+                tankX -= tankSpeed;
+            }
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+                tankX += tankSpeed;
+            }
+            
+            // Keep tank within bounds
+            tankX = Math.max(20, Math.min(gameContainer.clientWidth - 20, tankX));
+            tankY = Math.max(20, Math.min(gameContainer.clientHeight - 20, tankY));
+            
+            // Check for collisions with obstacles and revert position if colliding
+            if (checkTankObstacleCollision()) {
+                tankX = prevTankX;
+                tankY = prevTankY;
+            }
+            
+            // Update tank position
+            updateTankPosition();
+            
+            // Update enemies
+            updateEnemies();
+            
+            // Update bullets
+            updateBullets();
+            
+            // Update enemy bullets
+            updateEnemyBullets();
+            
+            // Check for collisions
+            checkCollisions();
+            
+            // Continue game loop
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start the game loop
+        gameLoop();
+        
+        // Helper functions
+        function updateTankPosition() {
+            tank.style.left = `${tankX}px`;
+            tank.style.top = `${tankY}px`;
+        }
+        
+        function createObstacles(count) {
+            for (let i = 0; i < count; i++) {
+                const obstacle = document.createElement('div');
+                obstacle.className = 'obstacle';
+                
+                // Random size
+                const width = Math.floor(Math.random() * 80) + 40;
+                const height = Math.floor(Math.random() * 80) + 40;
+                
+                // Random position (avoiding tank starting position)
+                let obstacleX, obstacleY;
+                do {
+                    obstacleX = Math.floor(Math.random() * (gameContainer.clientWidth - width));
+                    obstacleY = Math.floor(Math.random() * (gameContainer.clientHeight - height));
+                } while (Math.abs(obstacleX - tankX) < 100 && Math.abs(obstacleY - tankY) < 100);
+                
+                obstacle.style.width = `${width}px`;
+                obstacle.style.height = `${height}px`;
+                obstacle.style.left = `${obstacleX}px`;
+                obstacle.style.top = `${obstacleY}px`;
+                
+                gameContainer.appendChild(obstacle);
+                obstacles.push({
+                    element: obstacle,
+                    x: obstacleX,
+                    y: obstacleY,
+                    width: width,
+                    height: height
+                });
+            }
+        }
+        
+        function createEnemies(count) {
+            for (let i = 0; i < count; i++) {
+                // Create enemy container
+                const enemy = document.createElement('div');
+                enemy.className = 'enemy';
+                
+                // Create enemy barrel
+                const enemyBarrel = document.createElement('div');
+                enemyBarrel.className = 'enemyBarrel';
+                enemy.appendChild(enemyBarrel);
+                
+                // Random position (avoiding tank starting position)
+                let enemyX, enemyY;
+                let validPosition = false;
+                let attempts = 0;
+                
+                // Try to find a valid position that doesn't collide with obstacles
+                while (!validPosition && attempts < 50) {
+                    attempts++;
+                    enemyX = Math.floor(Math.random() * (gameContainer.clientWidth - 40)) + 20;
+                    enemyY = Math.floor(Math.random() * (gameContainer.clientHeight - 40)) + 20;
+                    
+                    // Check distance from player
+                    const distanceFromPlayer = Math.sqrt(
+                        Math.pow(enemyX - tankX, 2) + 
+                        Math.pow(enemyY - tankY, 2)
+                    );
+                    
+                    if (distanceFromPlayer < 200) {
+                        continue; // Too close to player, try again
+                    }
+                    
+                    // Check collision with obstacles
+                    let collides = false;
+                    for (let j = 0; j < obstacles.length; j++) {
+                        const obs = obstacles[j];
+                        if (circleRectCollision(enemyX, enemyY, 17.5, obs.x, obs.y, obs.width, obs.height)) {
+                            collides = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!collides) {
+                        validPosition = true;
+                    }
+                }
+                
+                // If we couldn't find a valid position after many attempts, just place it somewhere
+                if (!validPosition) {
+                    enemyX = Math.floor(Math.random() * (gameContainer.clientWidth - 100)) + 50;
+                    enemyY = Math.floor(Math.random() * (gameContainer.clientHeight - 100)) + 50;
+                }
+                
+                enemy.style.left = `${enemyX}px`;
+                enemy.style.top = `${enemyY}px`;
+                
+                gameContainer.appendChild(enemy);
+                
+                // Add enemy to array with properties
+                enemies.push({
+                    element: enemy,
+                    barrel: enemyBarrel,
+                    x: enemyX,
+                    y: enemyY,
+                    angle: 0,
+                    speed: 1 + Math.random(),
+                    moveTimer: 0,
+                    moveDirection: Math.random() * Math.PI * 2,
+                    changeDirectionTime: Math.floor(Math.random() * 100) + 50,
+                    lastShotTime: Date.now() + Math.floor(Math.random() * 3000), // Stagger initial shots
+                    shootCooldown: Math.floor(Math.random() * 5000) + 3000 // Random cooldown between 3-8 seconds
+                });
+            }
+        }
+        
+        function updateEnemies() {
+            const currentTime = Date.now();
+            
+            for (let i = 0; i < enemies.length; i++) {
+                const enemy = enemies[i];
+                const prevX = enemy.x;
+                const prevY = enemy.y;
+                
+                // Aim at player
+                enemy.angle = Math.atan2(tankY - enemy.y, tankX - enemy.x);
+                enemy.barrel.style.transform = `translateY(-50%) rotate(${enemy.angle}rad)`;
+                
+                // Move in current direction
+                enemy.moveTimer++;
+                if (enemy.moveTimer >= enemy.changeDirectionTime) {
+                    enemy.moveDirection = Math.random() * Math.PI * 2;
+                    enemy.changeDirectionTime = Math.floor(Math.random() * 100) + 50;
+                    enemy.moveTimer = 0;
+                }
+                
+                // Move enemy
+                enemy.x += Math.cos(enemy.moveDirection) * enemy.speed;
+                enemy.y += Math.sin(enemy.moveDirection) * enemy.speed;
+                
+                // Keep enemy within bounds
+                enemy.x = Math.max(20, Math.min(gameContainer.clientWidth - 20, enemy.x));
+                enemy.y = Math.max(20, Math.min(gameContainer.clientHeight - 20, enemy.y));
+                
+                // Check for collision with obstacles
+                let collided = false;
+                for (let j = 0; j < obstacles.length; j++) {
+                    const obs = obstacles[j];
+                    if (circleRectCollision(enemy.x, enemy.y, 17.5, obs.x, obs.y, obs.width, obs.height)) {
+                        // Revert position if colliding
+                        enemy.x = prevX;
+                        enemy.y = prevY;
+                        // Change direction
+                        enemy.moveDirection = (enemy.moveDirection + Math.PI) % (Math.PI * 2);
+                        collided = true;
+                        break;
+                    }
+                }
+                
+                // Update enemy position
+                enemy.element.style.left = `${enemy.x}px`;
+                enemy.element.style.top = `${enemy.y}px`;
+                
+                // Check if enemy should shoot
+                if (currentTime - enemy.lastShotTime > enemy.shootCooldown) {
+                    enemyShoot(enemy);
+                    enemy.lastShotTime = currentTime;
+                    // Reset cooldown to a new random value
+                    enemy.shootCooldown = Math.floor(Math.random() * 5000) + 3000;
+                }
+            }
+        }
+        
+        function enemyShoot(enemy) {
+            // Create bullet element
+            const bullet = document.createElement('div');
+            bullet.className = 'enemyBullet';
+            gameContainer.appendChild(bullet);
+            
+            // Calculate bullet trajectory
+            const bulletSpeed = 8;
+            const bulletX = enemy.x;
+            const bulletY = enemy.y;
+            
+            // Add bullet to array
+            enemyBullets.push({
+                element: bullet,
+                x: bulletX,
+                y: bulletY,
+                angle: enemy.angle,
+                speed: bulletSpeed
+            });
+            
+            // Update bullet position immediately
+            bullet.style.left = `${bulletX}px`;
+            bullet.style.top = `${bulletY}px`;
+            
+            // Create bullet trail for enemy bullets
+            createBulletTrail(bullet.x, bullet.y);
+        }
+        
+        function performEnemyHitscan(startX, startY, angle) {
+            // Calculate end point (far away in the direction of angle)
+            const maxDistance = Math.max(gameContainer.clientWidth, gameContainer.clientHeight) * 2;
+            const endX = startX + Math.cos(angle) * maxDistance;
+            const endY = startY + Math.sin(angle) * maxDistance;
+            
+            let closestHit = null;
+            let closestDistance = maxDistance;
+            
+            // Check for intersection with obstacles
+            for (let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
+                const hit = lineRectIntersection(
+                    startX, startY, endX, endY,
+                    obs.x, obs.y, obs.width, obs.height
+                );
+                
+                if (hit && hit.distance < closestDistance) {
+                    closestDistance = hit.distance;
+                    closestHit = hit;
+                }
+            }
+            
+            // Check for intersection with player
+            const hit = lineCircleIntersection(
+                startX, startY, endX, endY,
+                tankX, tankY, 20 // Tank radius
+            );
+            
+            if (hit && hit.distance < closestDistance) {
+                closestDistance = hit.distance;
+                closestHit = hit;
+                closestHit.hitPlayer = true;
+            }
+            
+            return closestHit;
+        }
+        
+        function handlePlayerHit() {
+            // Game over
+            gameActive = false;
+            
+            // Array of John Pork-based insults
+            const insults = [
+                'John Pork is disappointed',
+                'John Pork expected better',
+                'John Pork shakes his head',
+                'John Pork wonders why he bothered',
+                'John Pork thinks you can do better'
+            ];
+            
+            // Select a random insult
+            const randomInsult = insults[Math.floor(Math.random() * insults.length)];
+            
+            // Display the random insult
+            alert(randomInsult);
+        }
+        
+        function shoot() {
+            const currentTime = Date.now();
+            if (currentTime - lastShotTime < shootCooldown || bullets.length >= maxBullets) return;
+            
+            lastShotTime = currentTime;
+            
+            // Create bullet element
+            const bullet = document.createElement('div');
+            bullet.className = 'bullet';
+            gameContainer.appendChild(bullet);
+            
+            // Calculate bullet trajectory
+            const bulletSpeed = 15;
+            const bulletX = tankX;
+            const bulletY = tankY;
+            
+            // Add bullet to array
+            bullets.push({
+                element: bullet,
+                x: bulletX,
+                y: bulletY,
+                angle: tankAngle,
+                speed: bulletSpeed
+            });
+            
+            // Perform hitscan detection immediately
+            const hitResult = performHitscan(bulletX, bulletY, tankAngle);
+            if (hitResult) {
+                // If hit something, update bullet position to hit location
+                bullets[bullets.length - 1].x = hitResult.x;
+                bullets[bullets.length - 1].y = hitResult.y;
+            }
+        }
+        
+        function performHitscan(startX, startY, angle) {
+            // Calculate end point (far away in the direction of angle)
+            const maxDistance = Math.max(gameContainer.clientWidth, gameContainer.clientHeight) * 2;
+            const endX = startX + Math.cos(angle) * maxDistance;
+            const endY = startY + Math.sin(angle) * maxDistance;
+            
+            let closestHit = null;
+            let closestDistance = maxDistance;
+            
+            // Check for intersection with obstacles
+            for (let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
+                const hit = lineRectIntersection(
+                    startX, startY, endX, endY,
+                    obs.x, obs.y, obs.width, obs.height
+                );
+                
+                if (hit && hit.distance < closestDistance) {
+                    closestDistance = hit.distance;
+                    closestHit = hit;
+                }
+            }
+            
+            // Check for intersection with enemies
+            for (let i = 0; i < enemies.length; i++) {
+                const enemy = enemies[i];
+                const hit = lineCircleIntersection(
+                    startX, startY, endX, endY,
+                    enemy.x, enemy.y, 17.5 // Enemy radius
+                );
+                
+                if (hit && hit.distance < closestDistance) {
+                    closestDistance = hit.distance;
+                    closestHit = hit;
+                    
+                    // Handle enemy hit
+                    handleEnemyHit(i);
+                }
+            }
+            
+            return closestHit;
+        }
+        
+        function handleEnemyHit(enemyIndex) {
+            // Remove enemy from DOM
+            gameContainer.removeChild(enemies[enemyIndex].element);
+            
+            // Remove enemy from array
+            enemies.splice(enemyIndex, 1);
+            
+            // Increment score
+            score++;
+            scoreDisplay.textContent = `Score: ${score}`;
+            
+            // Create a new enemy after a delay
+            setTimeout(() => {
+                if (gameActive) {
+                    createEnemies(1);
+                }
+            }, 2000);
+        }
+        
+        function updateBullets() {
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                const prevX = bullet.x;
+                const prevY = bullet.y;
+                
+                // Move bullet
+                bullet.x += Math.cos(bullet.angle) * bullet.speed;
+                bullet.y += Math.sin(bullet.angle) * bullet.speed;
+                
+                // Update bullet position
+                bullet.element.style.left = `${bullet.x}px`;
+                bullet.element.style.top = `${bullet.y}px`;
+                
+                // Create bullet trail
+                createBulletTrail(bullet.x, bullet.y);
+                
+                // Perform raycasting for collision detection
+                const hitResult = performHitscan(prevX, prevY, bullet.angle);
+                if (hitResult) {
+                    // If hit something, update bullet position to hit location
+                    bullet.x = hitResult.x;
+                    bullet.y = hitResult.y;
+                    
+                    // Remove bullet from DOM
+                    gameContainer.removeChild(bullet.element);
+                    
+                    // Remove bullet from array
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // Remove bullets that are out of bounds
+                if (bullet.x < 0 || bullet.x > gameContainer.clientWidth ||
+                    bullet.y < 0 || bullet.y > gameContainer.clientHeight) {
+                    // Remove bullet from DOM
+                    gameContainer.removeChild(bullet.element);
+                    
+                    // Remove bullet from array
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+        
+        function createBulletTrail(x, y) {
+            const trail = document.createElement('div');
+            trail.className = 'bulletTrail';
+            trail.style.left = `${x}px`;
+            trail.style.top = `${y}px`;
+            gameContainer.appendChild(trail);
+            
+            // Fade out and remove trail
+            setTimeout(() => {
+                trail.style.opacity = '0';
+                setTimeout(() => {
+                    gameContainer.removeChild(trail);
+                }, 500); // Match the transition duration
+            }, 0);
+        }
+        
+        function updateEnemyBullets() {
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                const bullet = enemyBullets[i];
+                
+                // Move bullet
+                bullet.x += Math.cos(bullet.angle) * bullet.speed;
+                bullet.y += Math.sin(bullet.angle) * bullet.speed;
+                
+                // Update bullet position
+                bullet.element.style.left = `${bullet.x}px`;
+                bullet.element.style.top = `${bullet.y}px`;
+                
+                // Create bullet trail for enemy bullets
+                createBulletTrail(bullet.x, bullet.y);
+                
+                // Check for collision with obstacles
+                let collidedWithObstacle = false;
+                for (let j = 0; j < obstacles.length; j++) {
+                    const obs = obstacles[j];
+                    if (circleRectCollision(bullet.x, bullet.y, 2, obs.x, obs.y, obs.width, obs.height)) {
+                        collidedWithObstacle = true;
+                        break;
+                    }
+                }
+                
+                if (collidedWithObstacle) {
+                    // Remove bullet from DOM
+                    gameContainer.removeChild(bullet.element);
+                    
+                    // Remove bullet from array
+                    enemyBullets.splice(i, 1);
+                    continue;
+                }
+                
+                // Check for collision with player
+                const distance = Math.sqrt(
+                    Math.pow(tankX - bullet.x, 2) + 
+                    Math.pow(tankY - bullet.y, 2)
+                );
+                
+                if (distance < 20) { // Tank radius
+                    // Remove bullet
+                    gameContainer.removeChild(bullet.element);
+                    enemyBullets.splice(i, 1);
+                    
+                    // Handle player hit
+                    handlePlayerHit();
+                    break;
+                }
+            }
+        }
+        
+        function checkTankObstacleCollision() {
+            // Check player collision with obstacles
+            for (let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
+                
+                // Circle-rectangle collision detection
+                if (circleRectCollision(tankX, tankY, 20, obs.x, obs.y, obs.width, obs.height)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        function circleRectCollision(circleX, circleY, radius, rectX, rectY, rectWidth, rectHeight) {
+            // Find the closest point to the circle within the rectangle
+            const closestX = Math.max(rectX, Math.min(circleX, rectX + rectWidth));
+            const closestY = Math.max(rectY, Math.min(circleY, rectY + rectHeight));
+            
+            // Calculate the distance between the circle's center and this closest point
+            const distanceX = circleX - closestX;
+            const distanceY = circleY - closestY;
+            
+            // If the distance is less than the circle's radius, an intersection occurs
+            const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+            return distanceSquared < (radius * radius);
+        }
+        
+        function checkCollisions() {
+            // Check player collision with enemies
+            for (let i = 0; i < enemies.length; i++) {
+                const enemy = enemies[i];
+                const distance = Math.sqrt(
+                    Math.pow(tankX - enemy.x, 2) + 
+                    Math.pow(tankY - enemy.y, 2)
+                );
+                
+                if (distance < 35) { // Sum of tank and enemy radii
+                    // Game over
+                    gameActive = false;
+                    alert(`Game Over! Your score: ${score}`);
+                    break;
+                }
+            }
+        }
+        
+        // Utility functions for collision detection
+        function lineRectIntersection(x1, y1, x2, y2, rx, ry, rw, rh) {
+            // Check if line intersects with rectangle
+            const left = lineLine(x1, y1, x2, y2, rx, ry, rx, ry + rh);
+            const right = lineLine(x1, y1, x2, y2, rx + rw, ry, rx + rw, ry + rh);
+            const top = lineLine(x1, y1, x2, y2, rx, ry, rx + rw, ry);
+            const bottom = lineLine(x1, y1, x2, y2, rx, ry + rh, rx + rw, ry + rh);
+            
+            if (left || right || top || bottom) {
+                const hit = left || right || top || bottom;
+                const dx = hit.x - x1;
+                const dy = hit.y - y1;
+                hit.distance = Math.sqrt(dx * dx + dy * dy);
+                return hit;
+            }
+            
+            return null;
+        }
+        
+        function lineLine(x1, y1, x2, y2, x3, y3, x4, y4) {
+            // Calculate the direction of the lines
+            const uA = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) /
+                      ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1));
+            const uB = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) /
+                      ((y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1));
+            
+            // If uA and uB are between 0-1, lines are colliding
+            if (uA >= 0 && uA <= 1 && uB >= 0 && uB <= 1) {
+                const intersectionX = x1 + (uA * (x2 - x1));
+                const intersectionY = y1 + (uA * (y2 - y1));
+                
+                return {
+                    x: intersectionX,
+                    y: intersectionY
+                };
+            }
+            
+            return null;
+        }
+        
+        function lineCircleIntersection(x1, y1, x2, y2, cx, cy, r) {
+            // Check if line intersects with circle
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const a = dx * dx + dy * dy;
+            const b = 2 * (dx * (x1 - cx) + dy * (y1 - cy));
+            const c = cx * cx + cy * cy + x1 * x1 + y1 * y1 - 2 * (cx * x1 + cy * y1) - r * r;
+            
+            const discriminant = b * b - 4 * a * c;
+            
+            if (discriminant < 0) {
+                return null; // No intersection
+            }
+            
+            // Find the closest intersection point
+            const t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
+            const t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+            
+            let t = t1;
+            if (t < 0 || (t2 >= 0 && t2 < t)) {
+                t = t2;
+            }
+            
+            if (t >= 0 && t <= 1) {
+                return {
+                    x: x1 + t * dx,
+                    y: y1 + t * dy,
+                    distance: t * Math.sqrt(a)
+                };
+            }
+            
+            return null;
+        }
+    </script>
+</body>
+</html> 
