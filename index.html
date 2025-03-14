@@ -8,103 +8,145 @@
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #333;
+            background-color: #1a1a1a;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         #gameContainer {
             position: relative;
             width: 1200px;
             height: 900px;
-            background-color: #4a4;
-            border: 3px solid #000;
+            background: linear-gradient(135deg, #2c5530 0%, #1a331d 100%);
+            border: 4px solid #000;
             overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
         }
         #tank {
             position: absolute;
             width: 40px;
             height: 40px;
-            background-color: #00f;
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
             border-radius: 50%;
             transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(74, 144, 226, 0.5);
+            border: 2px solid #fff;
         }
         #tankBarrel {
             position: absolute;
             width: 20px;
             height: 8px;
-            background-color: #555;
+            background: linear-gradient(90deg, #666 0%, #444 100%);
             transform-origin: 0 50%;
             left: 50%;
             top: 50%;
             transform: translateY(-50%);
+            border-radius: 4px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
         }
         .obstacle {
             position: absolute;
-            background-color: #964B00;
+            background: linear-gradient(135deg, #8b4513 0%, #654321 100%);
             border: 2px solid #000;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
         }
         .enemy {
             position: absolute;
             width: 35px;
             height: 35px;
-            background-color: #f00;
+            background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
             border-radius: 50%;
             transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+            border: 2px solid #fff;
         }
         .enemyBarrel {
             position: absolute;
             width: 18px;
             height: 6px;
-            background-color: #555;
+            background: linear-gradient(90deg, #666 0%, #444 100%);
             transform-origin: 0 50%;
             left: 50%;
             top: 50%;
             transform: translateY(-50%);
+            border-radius: 3px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
         }
         .bullet {
             position: absolute;
-            width: 4px;
-            height: 4px;
-            background-color: #ff0;
+            width: 6px;
+            height: 6px;
+            background: linear-gradient(135deg, #ffeb3b 0%, #fdd835 100%);
             border-radius: 50%;
             transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(255, 235, 59, 0.8);
         }
         .enemyBullet {
             position: absolute;
-            width: 4px;
-            height: 4px;
-            background-color: #f80;
+            width: 6px;
+            height: 6px;
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
             border-radius: 50%;
             transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(255, 152, 0, 0.8);
         }
         .bulletTrail {
             position: absolute;
             width: 4px;
             height: 4px;
-            background-color: rgba(255, 255, 0, 0.5);
+            background: rgba(255, 255, 0, 0.3);
             border-radius: 50%;
             transform: translate(-50%, -50%);
             transition: opacity 0.5s ease-out;
+            box-shadow: 0 0 5px rgba(255, 255, 0, 0.5);
         }
         #score {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 20px;
+            left: 20px;
             color: white;
-            font-family: Arial, sans-serif;
-            font-size: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 20px;
             z-index: 10;
         }
         #instructions {
             position: absolute;
-            bottom: 10px;
-            left: 10px;
+            bottom: 20px;
+            left: 20px;
             color: white;
-            font-family: Arial, sans-serif;
-            font-size: 16px;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px 25px;
+            border-radius: 10px;
             z-index: 10;
+            line-height: 1.5;
+        }
+        .explosion-particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: explode 0.3s ease-out forwards;
+        }
+        @keyframes explode {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0);
+                opacity: 0;
+            }
         }
     </style>
 </head>
@@ -143,6 +185,9 @@
         let lastShotTime = 0;
         const shootCooldown = 300; // milliseconds between shots
         const maxBullets = 10; // Maximum number of active bullets
+        let lastFrameTime = 0; // Time of the last frame
+        const targetFPS = 60; // Target frames per second
+        const targetFrameTime = 1000 / targetFPS; // Target time between frames in ms
         
         // Initialize tank position
         updateTankPosition();
@@ -175,6 +220,14 @@
             tankBarrel.style.transform = `translateY(-50%) rotate(${tankAngle}rad)`;
         });
         
+        // Add a mouse click event listener for shooting
+        gameContainer.addEventListener('mousedown', (e) => {
+            // Only respond to left mouse button (button code 0)
+            if (e.button === 0) {
+                shoot();
+            }
+        });
+        
         // Add a keydown event listener for the space bar
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') {
@@ -183,25 +236,30 @@
         });
         
         // Game loop
-        function gameLoop() {
+        function gameLoop(currentTime) {
             if (!gameActive) return;
+            
+            // Calculate delta time (time since last frame in seconds)
+            if (!lastFrameTime) lastFrameTime = currentTime;
+            const deltaTime = (currentTime - lastFrameTime) / targetFrameTime;
+            lastFrameTime = currentTime;
             
             // Store previous position for collision handling
             const prevTankX = tankX;
             const prevTankY = tankY;
             
-            // Handle movement
+            // Handle movement with delta time
             if (keys['ArrowUp'] || keys['w'] || keys['W']) {
-                tankY -= tankSpeed;
+                tankY -= tankSpeed * deltaTime;
             }
             if (keys['ArrowDown'] || keys['s'] || keys['S']) {
-                tankY += tankSpeed;
+                tankY += tankSpeed * deltaTime;
             }
             if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
-                tankX -= tankSpeed;
+                tankX -= tankSpeed * deltaTime;
             }
             if (keys['ArrowRight'] || keys['d'] || keys['D']) {
-                tankX += tankSpeed;
+                tankX += tankSpeed * deltaTime;
             }
             
             // Keep tank within bounds
@@ -217,14 +275,14 @@
             // Update tank position
             updateTankPosition();
             
-            // Update enemies
-            updateEnemies();
+            // Update enemies with delta time
+            updateEnemies(deltaTime);
             
-            // Update bullets
-            updateBullets();
+            // Update bullets with delta time
+            updateBullets(deltaTime);
             
-            // Update enemy bullets
-            updateEnemyBullets();
+            // Update enemy bullets with delta time
+            updateEnemyBullets(deltaTime);
             
             // Check for collisions
             checkCollisions();
@@ -234,7 +292,7 @@
         }
         
         // Start the game loop
-        gameLoop();
+        requestAnimationFrame(gameLoop);
         
         // Helper functions
         function updateTankPosition() {
@@ -276,36 +334,44 @@
         
         function createEnemies(count) {
             for (let i = 0; i < count; i++) {
+                // Determine if this enemy is a stronger type
+                const isStrongEnemy = Math.random() < 0.2; // 20% chance to be a strong enemy
+
                 // Create enemy container
                 const enemy = document.createElement('div');
                 enemy.className = 'enemy';
                 
+                // Set color based on enemy type
+                if (isStrongEnemy) {
+                    enemy.style.backgroundColor = '#800080'; // Purple for strong enemy
+                }
+
                 // Create enemy barrel
                 const enemyBarrel = document.createElement('div');
                 enemyBarrel.className = 'enemyBarrel';
                 enemy.appendChild(enemyBarrel);
-                
+
                 // Random position (avoiding tank starting position)
                 let enemyX, enemyY;
                 let validPosition = false;
                 let attempts = 0;
-                
+
                 // Try to find a valid position that doesn't collide with obstacles
                 while (!validPosition && attempts < 50) {
                     attempts++;
                     enemyX = Math.floor(Math.random() * (gameContainer.clientWidth - 40)) + 20;
                     enemyY = Math.floor(Math.random() * (gameContainer.clientHeight - 40)) + 20;
-                    
+
                     // Check distance from player
                     const distanceFromPlayer = Math.sqrt(
                         Math.pow(enemyX - tankX, 2) + 
                         Math.pow(enemyY - tankY, 2)
                     );
-                    
+
                     if (distanceFromPlayer < 200) {
                         continue; // Too close to player, try again
                     }
-                    
+
                     // Check collision with obstacles
                     let collides = false;
                     for (let j = 0; j < obstacles.length; j++) {
@@ -315,23 +381,23 @@
                             break;
                         }
                     }
-                    
+
                     if (!collides) {
                         validPosition = true;
                     }
                 }
-                
+
                 // If we couldn't find a valid position after many attempts, just place it somewhere
                 if (!validPosition) {
                     enemyX = Math.floor(Math.random() * (gameContainer.clientWidth - 100)) + 50;
                     enemyY = Math.floor(Math.random() * (gameContainer.clientHeight - 100)) + 50;
                 }
-                
+
                 enemy.style.left = `${enemyX}px`;
                 enemy.style.top = `${enemyY}px`;
-                
+
                 gameContainer.appendChild(enemy);
-                
+
                 // Add enemy to array with properties
                 enemies.push({
                     element: enemy,
@@ -344,12 +410,14 @@
                     moveDirection: Math.random() * Math.PI * 2,
                     changeDirectionTime: Math.floor(Math.random() * 100) + 50,
                     lastShotTime: Date.now() + Math.floor(Math.random() * 3000), // Stagger initial shots
-                    shootCooldown: Math.floor(Math.random() * 5000) + 3000 // Random cooldown between 3-8 seconds
+                    shootCooldown: Math.floor(Math.random() * 5000) + 3000, // Random cooldown between 3-8 seconds
+                    isStrong: isStrongEnemy,
+                    hitPoints: isStrongEnemy ? 5 : 1 // 5 hits for strong enemy, 1 for regular
                 });
             }
         }
         
-        function updateEnemies() {
+        function updateEnemies(deltaTime) {
             const currentTime = Date.now();
             
             for (let i = 0; i < enemies.length; i++) {
@@ -361,17 +429,17 @@
                 enemy.angle = Math.atan2(tankY - enemy.y, tankX - enemy.x);
                 enemy.barrel.style.transform = `translateY(-50%) rotate(${enemy.angle}rad)`;
                 
-                // Move in current direction
-                enemy.moveTimer++;
+                // Move in current direction with delta time
+                enemy.moveTimer += deltaTime;
                 if (enemy.moveTimer >= enemy.changeDirectionTime) {
                     enemy.moveDirection = Math.random() * Math.PI * 2;
                     enemy.changeDirectionTime = Math.floor(Math.random() * 100) + 50;
                     enemy.moveTimer = 0;
                 }
                 
-                // Move enemy
-                enemy.x += Math.cos(enemy.moveDirection) * enemy.speed;
-                enemy.y += Math.sin(enemy.moveDirection) * enemy.speed;
+                // Move enemy with delta time
+                enemy.x += Math.cos(enemy.moveDirection) * enemy.speed * deltaTime;
+                enemy.y += Math.sin(enemy.moveDirection) * enemy.speed * deltaTime;
                 
                 // Keep enemy within bounds
                 enemy.x = Math.max(20, Math.min(gameContainer.clientWidth - 20, enemy.x));
@@ -570,33 +638,79 @@
         }
         
         function handleEnemyHit(enemyIndex) {
-            // Remove enemy from DOM
-            gameContainer.removeChild(enemies[enemyIndex].element);
+            const enemy = enemies[enemyIndex];
             
-            // Remove enemy from array
-            enemies.splice(enemyIndex, 1);
-            
-            // Increment score
-            score++;
-            scoreDisplay.textContent = `Score: ${score}`;
-            
-            // Create a new enemy after a delay
-            setTimeout(() => {
-                if (gameActive) {
-                    createEnemies(1);
-                }
-            }, 2000);
+            // Decrease hit points
+            enemy.hitPoints--;
+
+            // Check if enemy is destroyed
+            if (enemy.hitPoints <= 0) {
+                // Create explosion effect
+                createExplosion(enemy.x, enemy.y, enemy.isStrong ? '#800080' : '#ff4444');
+
+                // Remove enemy from DOM
+                gameContainer.removeChild(enemy.element);
+
+                // Remove enemy from array
+                enemies.splice(enemyIndex, 1);
+
+                // Increment score
+                score++;
+                scoreDisplay.textContent = `Score: ${score}`;
+
+                // Create a new enemy after a delay
+                setTimeout(() => {
+                    if (gameActive) {
+                        createEnemies(1);
+                    }
+                }, 2000);
+            }
         }
         
-        function updateBullets() {
+        function createExplosion(x, y, color) {
+            const particleCount = 12;
+            const particles = [];
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'explosion-particle';
+                particle.style.backgroundColor = color;
+                particle.style.left = `${x}px`;
+                particle.style.top = `${y}px`;
+                
+                // Random angle and distance for each particle
+                const angle = (Math.PI * 2 * i) / particleCount;
+                const distance = 8 + Math.random() * 12;
+                const targetX = x + Math.cos(angle) * distance;
+                const targetY = y + Math.sin(angle) * distance;
+                
+                // Add random movement animation
+                particle.style.animation = `explode 0.3s ease-out forwards`;
+                particle.style.transform = `translate(${targetX - x}px, ${targetY - y}px)`;
+                
+                gameContainer.appendChild(particle);
+                particles.push(particle);
+            }
+            
+            // Remove particles after animation
+            setTimeout(() => {
+                particles.forEach(particle => {
+                    if (particle.parentNode) {
+                        particle.parentNode.removeChild(particle);
+                    }
+                });
+            }, 300);
+        }
+        
+        function updateBullets(deltaTime) {
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const bullet = bullets[i];
                 const prevX = bullet.x;
                 const prevY = bullet.y;
                 
-                // Move bullet
-                bullet.x += Math.cos(bullet.angle) * bullet.speed;
-                bullet.y += Math.sin(bullet.angle) * bullet.speed;
+                // Move bullet with delta time
+                bullet.x += Math.cos(bullet.angle) * bullet.speed * deltaTime;
+                bullet.y += Math.sin(bullet.angle) * bullet.speed * deltaTime;
                 
                 // Update bullet position
                 bullet.element.style.left = `${bullet.x}px`;
@@ -648,13 +762,13 @@
             }, 0);
         }
         
-        function updateEnemyBullets() {
+        function updateEnemyBullets(deltaTime) {
             for (let i = enemyBullets.length - 1; i >= 0; i--) {
                 const bullet = enemyBullets[i];
                 
-                // Move bullet
-                bullet.x += Math.cos(bullet.angle) * bullet.speed;
-                bullet.y += Math.sin(bullet.angle) * bullet.speed;
+                // Move bullet with delta time
+                bullet.x += Math.cos(bullet.angle) * bullet.speed * deltaTime;
+                bullet.y += Math.sin(bullet.angle) * bullet.speed * deltaTime;
                 
                 // Update bullet position
                 bullet.element.style.left = `${bullet.x}px`;
